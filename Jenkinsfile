@@ -13,28 +13,15 @@ pipeline {
             }
         }
 
-        stage('2. Build Dependencies') {
+        stage('2. Build Verification') {
             steps {
-                echo 'Building frontend and project dependencies...'
+                echo 'Verifying project structure and Docker Compose config...'
                 sh '''
-                    if [ -f frontend/package.json ]; then
-                        echo "Building frontend dependencies..."
-                        docker run --rm -v $(pwd)/frontend:/app -w /app node:18-alpine npm install
-                    fi
-
-                    if [ -f backend/package.json ]; then
-                        echo "Building backend dependencies..."
-                        docker run --rm -v $(pwd)/backend:/app -w /app node:18-alpine npm install
-                    fi
-
-                    if [ -f package.json ]; then
-                        echo "Building root dependencies..."
-                        docker run --rm -v $(pwd):/app -w /app node:18-alpine npm install
-                    fi
+                    ls -la
+                    docker compose config
                 '''
             }
         }
-
         stage('3. Security Gate - Gitleaks Secret Scan') {
             steps {
                 echo 'Scanning for secrets with Gitleaks...'
