@@ -2,29 +2,26 @@ pipeline {
     agent any
 
     environment {
-        WEB_SERVER_IP = '172.31.222.200' 
-        DEPLOY_USER   = 'ubuntu'
-        GIT_REPO_URL  = 'https://github.com/your-username/croma.git' // Replace with your actual Git repo URL
+        WEB_SERVER_IP   = '172.31.222.200' 
+        DEPLOY_USER     = 'ubuntu'
+        DOCKER_HUB_USER = 'kaif03'
+        IMAGE_NAME      = 'kaif03/croma:v1'
     }
 
     stages {
         stage('1. Checkout Code') {
             steps {
-                echo 'Checking out source code from Git...'
+                echo 'Checking out source code from Git on Server 1...'
                 checkout scm
             }
         }
 
         stage('2. Build & Code Verification') {
             steps {
-                echo 'Verifying application source files and build environment...'
+                echo 'Verifying application source files on Server 1...'
                 sh '''
-                    echo "Checking project structure:"
                     test -f docker-compose.yml && echo "✓ docker-compose.yml found"
                     test -d backend && echo "✓ backend directory found"
-                    test -d frontend && echo "✓ frontend directory found"
-                    echo "Docker Environment:"
-                    docker --version
                 '''
             }
         }
@@ -38,7 +35,7 @@ pipeline {
 
         stage('4. Security Gate - SonarQube Analysis') {
             steps {
-                echo 'Running SonarQube Code Quality & SAST scan for project croma...'
+                echo 'Running SonarQube Code Quality & SAST scan...'
                 withSonarQubeEnv('SonarQube') {
                     sh '''
                         sonar-scanner \
@@ -59,7 +56,7 @@ pipeline {
                         echo 'Checking SonarQube Quality Gate Status...'
                         try {
                             def qg = waitForQualityGate()
-                            echo "Quality Gate Result for croma: ${qg.status}"
+                            echo "Quality Gate Result: ${qg.status}"
                         } catch (Exception e) {
                             echo "Quality Gate Status Checked: ${e.message}"
                         }
@@ -68,15 +65,33 @@ pipeline {
             }
         }
 
-        stage('6. Rolling Deployment to Web Server') {
+        stage('6. Build & Push Docker Image (Server 1)') {
             steps {
                 script {
-                    echo 'Executing Rolling Deployment on Server 2...'
+                    echo 'Building production Docker image on Server 1...'
+                    sh "docker build -t ${IMAGE_NAME} ./backend"
+
+                    echo 'Pushing Docker image to Docker Hub Registry...'
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh '''
+                            echo "$PASS" | docker login -u "$USER" --password-stdin
+                            docker push ${IMAGE_NAME}
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('7. Deploy Container Image to Web Server (Server 2)') {
+            steps {
+                script {
+                    echo 'Deploying Docker Hub image to Web Server (Server 2) over SSH...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            cd ~/croma-app/croma-Devsecops
-                            git pull origin main || true
-                            docker compose up -d --build
+                            docker pull ${IMAGE_NAME}
+                            docker stop croma-backend || true
+                            docker rm croma-backend || true
+                            docker run -d --name croma-backend -p 5000:5000 ${IMAGE_NAME}
                             docker ps
                         "
                     '''
@@ -84,19 +99,21 @@ pipeline {
             }
         }
 
-        stage('7. Health Check Verification') {
+        stage('8. Health Check Verification') {
             steps {
                 echo 'Verifying deployment health on Server 2...'
                 sh '''
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                        curl -s -f http://localhost:8080/api/health || exit 1
+                        curl -s -f http://localhost:8080/api/health || curl -s -f http://localhost:5000/api/health || exit 1
                     "
                 '''
             }
         }
+    }
+
     post {
         success {
-            echo 'Pipeline PASSED! Croma application successfully scanned, built, and deployed to Server 2.'
+            echo 'Option 2 DevSecOps Pipeline PASSED! Image built on Server 1, pushed to Docker Hub, and deployed to Server 2.'
         }
         failure {
             echo 'Pipeline FAILED! Check logs for details.'
