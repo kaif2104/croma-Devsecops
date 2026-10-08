@@ -4,6 +4,7 @@ pipeline {
     environment {
         WEB_SERVER_IP = '172.31.222.200' 
         DEPLOY_USER   = 'ubuntu'
+        GIT_REPO_URL  = 'https://github.com/your-username/croma.git' // Replace with your actual Git repo URL
     }
 
     stages {
@@ -66,20 +67,45 @@ pipeline {
                 }
             }
         }
-        stage('6. Deploy to Web Server') {
+
+        stage('6. Rolling Deployment to Web Server') {
             steps {
-                echo 'Quality Gate Passed! Deploying croma to Web Server (Server 2)...'
-                sh 'ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "docker --version && nginx -v"'
+                script {
+                    echo 'Executing Rolling Deployment of Version 1 to Server 2...'
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                            mkdir -p ~/croma-app
+                            if [ ! -d ~/croma-app/.git ]; then
+                                git clone ${GIT_REPO_URL} ~/croma-app
+                            fi
+                            cd ~/croma-app
+                            git pull origin main || true
+                            docker compose up -d --build
+                            docker ps
+                        "
+                    '''
+                }
+            }
+        }
+
+        stage('7. Health Check Verification') {
+            steps {
+                echo 'Verifying deployment health on Server 2...'
+                sh '''
+                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                        curl -f http://localhost:8080/api/health || curl -f http://localhost:5000/api/health || exit 1
+                    "
+                '''
             }
         }
     }
 
     post {
         success {
-            echo 'Task 2 — Security Gate PASSED for croma and deployment verified!'
+            echo 'Pipeline PASSED! Croma application successfully scanned, built, and deployed to Server 2.'
         }
         failure {
-            echo 'Task 2 — Pipeline FAILED. Deployment stopped!'
+            echo 'Pipeline FAILED! Check logs for details.'
         }
     }
 }
