@@ -90,7 +90,7 @@ pipeline {
                     def migrationStatus = sh(
                         script: '''
                             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                                docker exec -i croma-devsecops-db-1 psql -U shopuser -d shopzone -c 'ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;'
+                                docker exec -i croma-devsecops-db-1 psql -U postgres -d shopzone -c 'ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;'
                             "
                         ''',
                         returnStatus: true
@@ -103,7 +103,7 @@ pipeline {
                     echo 'Validating DB Schema & Connection...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            docker exec -i croma-devsecops-db-1 psql -U shopuser -d shopzone -c 'SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';'
+                            docker exec -i croma-devsecops-db-1 psql -U postgres -d shopzone -c 'SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';'
                         "
                     '''
                     echo '✅ Database Migration & Schema Validation Successful!'
