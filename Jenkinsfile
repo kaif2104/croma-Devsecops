@@ -53,7 +53,7 @@ pipeline {
 
         stage('5. Quality Gate Gatekeeper') {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
+                timeout(time: 5, unit: 'MINUTES') {
                     script {
                         echo 'Checking SonarQube Quality Gate Status...'
                         def qg = waitForQualityGate()
@@ -66,7 +66,6 @@ pipeline {
                 }
             }
         }
-
         stage('6. Deploy to Web Server') {
             steps {
                 echo 'Quality Gate Passed! Deploying croma to Web Server (Server 2)...'
