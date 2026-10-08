@@ -71,14 +71,10 @@ pipeline {
         stage('6. Rolling Deployment to Web Server') {
             steps {
                 script {
-                    echo 'Executing Rolling Deployment of Version 1 to Server 2...'
+                    echo 'Executing Rolling Deployment on Server 2...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            mkdir -p ~/croma-app
-                            if [ ! -d ~/croma-app/.git ]; then
-                                git clone ${GIT_REPO_URL} ~/croma-app
-                            fi
-                            cd ~/croma-app
+                            cd ~/croma-app/croma-Devsecops
                             git pull origin main || true
                             docker compose up -d --build
                             docker ps
@@ -93,13 +89,11 @@ pipeline {
                 echo 'Verifying deployment health on Server 2...'
                 sh '''
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                        curl -f http://localhost:8080/api/health || curl -f http://localhost:5000/api/health || exit 1
+                        curl -s -f http://localhost:8080/api/health || exit 1
                     "
                 '''
             }
         }
-    }
-
     post {
         success {
             echo 'Pipeline PASSED! Croma application successfully scanned, built, and deployed to Server 2.'
