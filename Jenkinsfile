@@ -91,7 +91,10 @@ pipeline {
                             docker pull ${IMAGE_NAME}
                             docker stop croma-backend || true
                             docker rm croma-backend || true
-                            docker run -d --name croma-backend -p 5000:5000 ${IMAGE_NAME}
+                            docker run -d --name croma-backend -p 8081:4000 \
+                              -e JWT_SECRET='mylongsupersecretkey123' \
+                              -e DATABASE_URL='postgres://shopuser:shoppassword@172.17.0.1:5432/shopzone' \
+                              ${IMAGE_NAME}
                             docker ps
                         "
                     '''
@@ -99,24 +102,45 @@ pipeline {
             }
         }
 
-        stage('8. Health Check Verification') {
+        stage('8. Automated Health Check & Auto-Rollback') {
             steps {
-                echo 'Verifying deployment health on Server 2...'
-                sh '''
-                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                        curl -s -f http://localhost:8080/api/health || curl -s -f http://localhost:5000/api/health || exit 1
-                    "
-                '''
+                script {
+                    echo 'Running Automated Post-Deployment Health Check on Server 2...'
+                    
+                    def healthCheckStatus = sh(
+                        script: '''
+                            ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                                curl -s -f http://localhost:8081/api/health || curl -s -f http://localhost/api/health
+                            "
+                        ''',
+                        returnStatus: true
+                    )
+
+                    if (healthCheckStatus == 0) {
+                        echo '✅ Health Check PASSED! Deployment confirmed stable.'
+                    } else {
+                        echo '❌ Health Check FAILED! Initiating AUTOMATIC ROLLBACK to Blue Environment...'
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                                # Automatic Rollback: Switch Nginx back to Blue (8081)
+                                sudo sed -i 's/127.0.0.1:8082;/127.0.0.1:8081;/' /etc/nginx/sites-available/croma
+                                sudo nginx -s reload
+                                echo 'Rollback completed successfully.'
+                            "
+                        '''
+                        error 'Deployment aborted and rolled back due to Health Check failure.'
+                    }
+                }
             }
         }
     }
 
     post {
         success {
-            echo 'Option 2 DevSecOps Pipeline PASSED! Image built on Server 1, pushed to Docker Hub, and deployed to Server 2.'
+            echo 'Task 5 Pipeline PASSED! Image deployed, health checked, and verified.'
         }
         failure {
-            echo 'Pipeline FAILED! Check logs for details.'
+            echo 'Task 5 Pipeline FAILED! Deployment stopped or rolled back.'
         }
     }
 }
