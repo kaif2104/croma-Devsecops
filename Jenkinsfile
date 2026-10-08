@@ -13,12 +13,24 @@ pipeline {
             }
         }
 
-        stage('2. Build Backend & Frontend') {
+        stage('2. Build Dependencies') {
             steps {
-                echo 'Building backend and frontend dependencies...'
+                echo 'Building frontend and project dependencies...'
                 sh '''
-                    docker run --rm -v $(pwd)/backend:/app -w /app node:18-alpine npm install
-                    docker run --rm -v $(pwd)/frontend:/app -w /app node:18-alpine npm install
+                    if [ -f frontend/package.json ]; then
+                        echo "Building frontend dependencies..."
+                        docker run --rm -v $(pwd)/frontend:/app -w /app node:18-alpine npm install
+                    fi
+
+                    if [ -f backend/package.json ]; then
+                        echo "Building backend dependencies..."
+                        docker run --rm -v $(pwd)/backend:/app -w /app node:18-alpine npm install
+                    fi
+
+                    if [ -f package.json ]; then
+                        echo "Building root dependencies..."
+                        docker run --rm -v $(pwd):/app -w /app node:18-alpine npm install
+                    fi
                 '''
             }
         }
