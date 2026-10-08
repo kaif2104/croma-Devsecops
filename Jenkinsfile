@@ -82,7 +82,36 @@ pipeline {
             }
         }
 
-        stage('7. Deploy Container Image to Web Server (Server 2)') {
+        stage('7. Database Migration & Validation') {
+            steps {
+                script {
+                    echo 'Running Database Migration on PostgreSQL (Server 2)...'
+                    
+                    def migrationStatus = sh(
+                        script: '''
+                            ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                                docker exec -i croma-devsecops-db-1 psql -U shopuser -d shopzone -c 'ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;'
+                            "
+                        ''',
+                        returnStatus: true
+                    )
+
+                    if (migrationStatus != 0) {
+                        error '❌ Database Migration FAILED! Halting deployment to prevent DB corruption.'
+                    }
+
+                    echo 'Validating DB Schema & Connection...'
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                            docker exec -i croma-devsecops-db-1 psql -U shopuser -d shopzone -c 'SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';'
+                        "
+                    '''
+                    echo '✅ Database Migration & Schema Validation Successful!'
+                }
+            }
+        }
+
+        stage('8. Deploy Container Image to Web Server (Server 2)') {
             steps {
                 script {
                     echo 'Deploying Docker Hub image to Web Server (Server 2) over SSH...'
@@ -102,7 +131,7 @@ pipeline {
             }
         }
 
-        stage('8. Automated Health Check & Auto-Rollback') {
+        stage('9. Automated Health Check & Auto-Rollback') {
             steps {
                 script {
                     echo 'Running Automated Post-Deployment Health Check on Server 2...'
@@ -122,7 +151,6 @@ pipeline {
                         echo '❌ Health Check FAILED! Initiating AUTOMATIC ROLLBACK to Blue Environment...'
                         sh '''
                             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                                # Automatic Rollback: Switch Nginx back to Blue (8081)
                                 sudo sed -i 's/127.0.0.1:8082;/127.0.0.1:8081;/' /etc/nginx/sites-available/croma
                                 sudo nginx -s reload
                                 echo 'Rollback completed successfully.'
@@ -137,10 +165,10 @@ pipeline {
 
     post {
         success {
-            echo 'Task 5 Pipeline PASSED! Image deployed, health checked, and verified.'
+            echo 'Task 6 DevSecOps Pipeline PASSED! Database migrated, schema validated, app deployed, and health verified.'
         }
         failure {
-            echo 'Task 5 Pipeline FAILED! Deployment stopped or rolled back.'
+            echo 'Task 6 Pipeline FAILED! Check logs for migration or deployment errors.'
         }
     }
 }

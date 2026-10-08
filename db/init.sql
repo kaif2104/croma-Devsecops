@@ -6,6 +6,8 @@ CREATE TABLE orders (id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES user
   total NUMERIC(12,2) NOT NULL, created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE order_items (order_id INT REFERENCES orders(id) ON DELETE CASCADE, product_id INT REFERENCES products(id),
   qty INT NOT NULL CHECK (qty > 0), unit_price NUMERIC(10,2) NOT NULL);
+-- Migration 001: Add discount_percent column to products table
+ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;
 INSERT INTO products (name,brand,category,price,specs,description,image,stock) VALUES
 ('Nova X1 Lite','Nova','smartphone',299.99,'6.1" OLED | 6GB RAM | 128GB | 4200mAh | 5G','Nova X1 Lite pairs a bright 6.1-inch OLED display with 6GB of memory and a 4200mAh battery that lasts all day.','/img/p1.svg',27),
 ('Nova X2 Plus','Nova','smartphone',499.99,'6.4" OLED | 8GB RAM | 256GB | 4600mAh | 5G','Nova X2 Plus pairs a bright 6.4-inch OLED display with 8GB of memory and a 4600mAh battery that lasts all day.','/img/p2.svg',34),
