@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Replace with Server 2 Private IP (or Public IP)
-        WEB_SERVER_IP = '192.168.1.50' 
+        WEB_SERVER_IP = '172.31.222.200' 
         DEPLOY_USER   = 'ubuntu'
     }
 
