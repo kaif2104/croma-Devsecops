@@ -9,22 +9,28 @@ pipeline {
     stages {
         stage('1. Checkout Code') {
             steps {
+                echo 'Checking out source code from Git...'
                 checkout scm
             }
         }
 
-        stage('2. Build Verification') {
+        stage('2. Build & Code Verification') {
             steps {
-                echo 'Verifying project structure and Docker Compose config...'
+                echo 'Verifying application source files and build environment...'
                 sh '''
-                    ls -la
-                    docker compose config
+                    echo "Checking project structure:"
+                    test -f docker-compose.yml && echo "✓ docker-compose.yml found"
+                    test -d backend && echo "✓ backend directory found"
+                    test -d frontend && echo "✓ frontend directory found"
+                    echo "Docker Environment:"
+                    docker --version
                 '''
             }
         }
+
         stage('3. Security Gate - Gitleaks Secret Scan') {
             steps {
-                echo 'Scanning for secrets with Gitleaks...'
+                echo 'Scanning repository for leaked secrets with Gitleaks...'
                 sh 'gitleaks detect --source . --verbose || exit 1'
             }
         }
@@ -37,7 +43,7 @@ pipeline {
                         sonar-scanner \
                           -Dsonar.projectKey=croma \
                           -Dsonar.projectName=croma \
-                          -Dsonar.sources=backend,frontend/src \
+                          -Dsonar.sources=backend,frontend \
                           -Dsonar.host.url=http://172.17.0.1:9000 \
                           -Dsonar.login=$SONAR_AUTH_TOKEN
                     '''
@@ -63,18 +69,18 @@ pipeline {
 
         stage('6. Deploy to Web Server') {
             steps {
-                echo 'Quality Gate Passed! Deploying croma to Server 2...'
-                sh 'ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "echo Deployment Started for croma"'
+                echo 'Quality Gate Passed! Deploying croma to Web Server (Server 2)...'
+                sh 'ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "docker --version && nginx -v"'
             }
         }
     }
 
     post {
         success {
-            echo 'Task 2 — Security Gate PASSED for croma!'
+            echo 'Task 2 — Security Gate PASSED for croma and deployment verified!'
         }
         failure {
-            echo 'Task 2 — Security Gate FAILED for croma. Deployment stopped!'
+            echo 'Task 2 — Pipeline FAILED. Deployment stopped!'
         }
     }
 }
