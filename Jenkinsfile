@@ -90,7 +90,7 @@ pipeline {
                     def migrationStatus = sh(
                         script: '''
                             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                                docker exec -i croma-db psql -U shopuser -d shopzone -c 'ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;'
+                                docker exec -i croma-db psql -U shopuser -d shopzone -c \\"ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;\\"
                             "
                         ''',
                         returnStatus: true
@@ -103,13 +103,14 @@ pipeline {
                     echo 'Validating DB Schema & Connection...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            docker exec -i croma-db psql -U shopuser -d shopzone -c 'SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';'
+                            docker exec -i croma-db psql -U shopuser -d shopzone -c \\"SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name='discount_percent';\\"
                         "
                     '''
                     echo '✅ Database Migration & Schema Validation Successful!'
                 }
             }
         }
+
         stage('8. Deploy Container Image to Web Server (Server 2)') {
             steps {
                 script {
@@ -164,10 +165,10 @@ pipeline {
 
     post {
         success {
-            echo 'Task 6 DevSecOps Pipeline PASSED! Database migrated, schema validated, app deployed, and health verified.'
+            echo 'DevSecOps Pipeline PASSED 100%! All security gates, migrations, deployments, and health checks verified.'
         }
         failure {
-            echo 'Task 6 Pipeline FAILED! Check logs for migration or deployment errors.'
+            echo 'Pipeline FAILED! Check stage logs for details.'
         }
     }
 }
