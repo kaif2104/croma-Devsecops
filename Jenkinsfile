@@ -5,7 +5,8 @@ pipeline {
         WEB_SERVER_IP   = '172.31.222.200' 
         DEPLOY_USER     = 'ubuntu'
         DOCKER_HUB_USER = 'kaif03'
-        IMAGE_NAME      = 'kaif03/croma:v1'
+        BACKEND_IMAGE   = 'kaif03/croma-backend:v1'
+        FRONTEND_IMAGE  = 'kaif03/croma-frontend:v1'
     }
 
     stages {
@@ -22,6 +23,7 @@ pipeline {
                 sh '''
                     test -f docker-compose.yml && echo "✓ docker-compose.yml found"
                     test -d backend && echo "✓ backend directory found"
+                    test -d frontend && echo "✓ frontend directory found"
                 '''
             }
         }
@@ -65,17 +67,19 @@ pipeline {
             }
         }
 
-        stage('6. Build & Push Docker Image (Server 1)') {
+        stage('6. Build & Push Docker Images (Server 1)') {
             steps {
                 script {
-                    echo 'Building production Docker image on Server 1...'
-                    sh "docker build -t ${IMAGE_NAME} ./backend"
+                    echo 'Building Backend and Frontend Docker images on Server 1...'
+                    sh "docker build -t ${BACKEND_IMAGE} ./backend"
+                    sh "docker build -t ${FRONTEND_IMAGE} ./frontend"
 
-                    echo 'Pushing Docker image to Docker Hub Registry...'
+                    echo 'Pushing Docker images to Docker Hub Registry...'
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                         sh '''
                             echo "$PASS" | docker login -u "$USER" --password-stdin
-                            docker push ${IMAGE_NAME}
+                            docker push ${BACKEND_IMAGE}
+                            docker push ${FRONTEND_IMAGE}
                         '''
                     }
                 }
@@ -107,19 +111,29 @@ pipeline {
             }
         }
 
-        stage('8. Deploy Container Image to Web Server (Server 2)') {
+        stage('8. Deploy Frontend & Backend Containers to Web Server (Server 2)') {
             steps {
                 script {
-                    echo 'Deploying Docker Hub image to Web Server (Server 2) over SSH...'
+                    echo 'Deploying Docker Hub images to Web Server (Server 2) over SSH...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            docker pull ${IMAGE_NAME}
+                            # Pull latest images
+                            docker pull ${BACKEND_IMAGE}
+                            docker pull ${FRONTEND_IMAGE}
+
+                            # Restart Backend container (Port 8081)
                             docker stop croma-backend || true
                             docker rm croma-backend || true
                             docker run -d --name croma-backend -p 8081:4000 \
                               -e JWT_SECRET='mylongsupersecretkey123' \
                               -e DATABASE_URL='postgres://shopuser:shoppassword@172.17.0.1:5432/shopzone' \
-                              ${IMAGE_NAME}
+                              ${BACKEND_IMAGE}
+
+                            # Restart Frontend container (Port 8080)
+                            docker stop croma-frontend || true
+                            docker rm croma-frontend || true
+                            docker run -d --name croma-frontend -p 8080:80 ${FRONTEND_IMAGE}
+
                             docker ps
                         "
                     '''
@@ -158,6 +172,7 @@ pipeline {
                 }
             }
         }
+    }
 
     post {
         success {
