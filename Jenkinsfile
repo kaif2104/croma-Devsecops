@@ -100,12 +100,13 @@ pipeline {
 
                     echo 'Validating DB Schema & Connection...'
                     sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "docker exec -i croma-db psql -U shopuser -d shopzone -c \\"SELECT column_name FROM products LIMIT 1;\\""
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "docker exec -i croma-db psql -U shopuser -d shopzone -c \\"SELECT discount_percent FROM products LIMIT 1;\\""
                     '''
                     echo '✅ Database Migration & Schema Validation Successful!'
                 }
             }
         }
+
         stage('8. Deploy Container Image to Web Server (Server 2)') {
             steps {
                 script {
