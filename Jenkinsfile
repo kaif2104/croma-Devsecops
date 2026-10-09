@@ -90,7 +90,14 @@ pipeline {
                     def migrationStatus = sh(
                         script: '''
                             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                                docker exec -i croma-devsecops-db-1 sh -c 'psql -U \\$POSTGRES_USER -d \\$POSTGRES_DB -c \"ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;\"'
+                                # Find running postgres container ID
+                                DB_CONTAINER=\\$(docker ps --filter ancestor=postgres:16-alpine -q | head -n 1)
+                                if [ -z \\"\$DB_CONTAINER\\" ]; then
+                                    DB_CONTAINER=\\$(docker ps --filter name=db -q | head -n 1)
+                                fi
+
+                                echo \\"Target DB Container: \$DB_CONTAINER\\"
+                                docker exec -i \$DB_CONTAINER sh -c 'psql -U \\$POSTGRES_USER -d \\$POSTGRES_DB -c \"ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INT DEFAULT 0;\"'
                             "
                         ''',
                         returnStatus: true
@@ -103,14 +110,17 @@ pipeline {
                     echo 'Validating DB Schema & Connection...'
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
-                            docker exec -i croma-devsecops-db-1 sh -c 'psql -U \\$POSTGRES_USER -d \\$POSTGRES_DB -c \"SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';\"'
+                            DB_CONTAINER=\\$(docker ps --filter ancestor=postgres:16-alpine -q | head -n 1)
+                            if [ -z \\"\$DB_CONTAINER\\" ]; then
+                                DB_CONTAINER=\\$(docker ps --filter name=db -q | head -n 1)
+                            fi
+                            docker exec -i \$DB_CONTAINER sh -c 'psql -U \\$POSTGRES_USER -d \\$POSTGRES_DB -c \"SELECT column_name FROM information_schema.columns WHERE table_name=\\'products\\' AND column_name=\\'discount_percent\\';\"'
                         "
                     '''
                     echo '✅ Database Migration & Schema Validation Successful!'
                 }
             }
         }
-
         stage('8. Deploy Container Image to Web Server (Server 2)') {
             steps {
                 script {
