@@ -135,6 +135,7 @@ pipeline {
                     def healthCheckStatus = sh(
                         script: '''
                             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${WEB_SERVER_IP} "
+                                sleep 5
                                 curl -s -f http://localhost:8081/api/health || curl -s -f http://localhost/api/health
                             "
                         ''',
@@ -157,7 +158,6 @@ pipeline {
                 }
             }
         }
-    }
 
     post {
         success {
